@@ -43,7 +43,6 @@ create table if not exists public.submissions (
 create index if not exists submissions_challenge_score_idx on public.submissions(challenge_id,total_score desc);
 create index if not exists challenges_date_status_idx on public.daily_challenges(challenge_date,status);
 
--- Automatically create a player profile when a user signs up.
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
@@ -59,7 +58,7 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
--- Score answers on the server. Correct answers score more when fewer submitted answers match.
+-- Server-side scoring: accepted answers score more when fewer submitted answers match.
 create or replace function public.score_submission()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
@@ -76,16 +75,12 @@ begin
   loop
     given := lower(trim(coalesce(new.answers->>q.id::text,'')));
     if given = '' then continue; end if;
-    select count(*) into matched
-    from unnest(q.accepted_answers) a
-    where lower(trim(a)) = given;
+    select count(*) into matched from unnest(q.accepted_answers) a where lower(trim(a)) = given;
     if matched > 0 then
       select count(*) into valid_count
       from public.submissions s
       cross join lateral jsonb_each_text(s.answers) a(key,value)
-      where s.challenge_id = new.challenge_id
-        and lower(trim(a.value)) = given;
-      -- Valid uncommon answers score higher. One match: full points; repeated answers taper off.
+      where s.challenge_id = new.challenge_id and lower(trim(a.value)) = given;
       total := total + greatest(1, floor(q.base_points::numeric / greatest(1, coalesce(valid_count,0)+1))::int);
     end if;
   end loop;
@@ -103,15 +98,16 @@ alter table public.daily_challenges enable row level security;
 alter table public.questions enable row level security;
 alter table public.submissions enable row level security;
 
--- Profile names are visible to leaderboard visitors. Users can edit their own nickname, not role.
+-- Profile names are readable to signed-in players. Client updates are limited to nickname.
 drop policy if exists "Profiles are readable" on public.profiles;
 create policy "Profiles are readable" on public.profiles for select to authenticated using (true);
 drop policy if exists "Users can create own profile" on public.profiles;
 create policy "Users can create own profile" on public.profiles for insert to authenticated with check (auth.uid() = id and role = 'player');
 drop policy if exists "Users can update own nickname" on public.profiles;
-create policy "Users can update own nickname" on public.profiles for update to authenticated using (auth.uid() = id) with check (auth.uid() = id and role in ('player','admin'));
+create policy "Users can update own nickname" on public.profiles for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
+revoke update on public.profiles from authenticated;
+grant update (nickname) on public.profiles to authenticated;
 
--- Anyone signed in can see published challenges and their questions. Admins can manage all challenges.
 drop policy if exists "Published challenges are readable" on public.daily_challenges;
 create policy "Published challenges are readable" on public.daily_challenges for select to authenticated using (status = 'published' or exists(select 1 from public.profiles p where p.id = auth.uid() and p.role='admin'));
 drop policy if exists "Admins manage challenges" on public.daily_challenges;
@@ -122,7 +118,6 @@ create policy "Published questions are readable" on public.questions for select 
 drop policy if exists "Admins manage questions" on public.questions;
 create policy "Admins manage questions" on public.questions for all to authenticated using (exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='admin')) with check (exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='admin'));
 
--- Players may submit once per challenge. Scores and answer sets are immutable to clients.
 drop policy if exists "Players see own submissions" on public.submissions;
 create policy "Players see own submissions" on public.submissions for select to authenticated using (auth.uid()=user_id or exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='admin'));
 drop policy if exists "Players submit own answers" on public.submissions;
@@ -132,7 +127,6 @@ create policy "No client edits to submissions" on public.submissions for update 
 drop policy if exists "No client deletes to submissions" on public.submissions;
 create policy "No client deletes to submissions" on public.submissions for delete to authenticated using (false);
 
--- Shared leaderboard. This view intentionally exposes only nickname, score and date.
 create or replace view public.leaderboard as
 select p.nickname, s.total_score, c.challenge_date, s.submitted_at
 from public.submissions s
