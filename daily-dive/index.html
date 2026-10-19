@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071b2d">
+  <title>Daily Dive — Trivia for the curious</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark">✦</span> DAILY DIVE</a>
+    <nav><button class="nav-link active" data-view="play">Play</button><button class="nav-link" data-view="leaderboard">Leaderboard</button><button class="nav-link admin-only hidden" data-view="admin">Question studio</button></nav>
+    <div id="account-area"><button id="login-open" class="button button-outline">Sign in</button></div>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="eyebrow"><span class="pulse"></span> ONE DAILY CHALLENGE</div>
+      <h1>Go deeper.<br><span>Think different.</span></h1>
+      <p>Seven questions. Your best answers. A leaderboard that rewards thinking beyond the obvious.</p>
+      <div class="hero-meta"><span>◷ About 3 minutes</span><span>✦ Rarity-based scoring</span><span>◎ Everyone plays the same set</span></div>
+    </section>
+    <section id="view-play" class="view">
+      <div class="section-heading"><div><div class="eyebrow">TODAY'S DIVE</div><h2 id="date-heading">Loading today's questions…</h2></div><div id="play-status" class="status-pill">Checking challenge</div></div>
+      <div id="game-content"><div class="empty-state"><div class="spinner"></div><p>Preparing your dive…</p></div></div>
+    </section>
+    <section id="view-leaderboard" class="view hidden">
+      <div class="section-heading"><div><div class="eyebrow">THE DEEP END</div><h2>Leaderboard</h2><p class="muted">See how your answers stack up against everyone else.</p></div><select id="leaderboard-period" class="select"><option value="today">Today's challenge</option><option value="all">All-time scores</option></select></div>
+      <div id="leaderboard-content"></div>
+    </section>
+    <section id="view-admin" class="view hidden">
+      <div class="section-heading"><div><div class="eyebrow">HOST CONTROLS</div><h2>Question studio</h2><p class="muted">Build and publish a daily challenge for everyone.</p></div></div>
+      <div id="admin-content"></div>
+    </section>
+    <section class="bottom-note"><span>✦</span><p>Good answers are out there. Great answers are the ones nobody else thought of.</p></section>
+  </main>
+  <footer><span>DAILY DIVE</span><span>Made for curious minds.</span><button id="setup-open" class="footer-link">Database setup</button></footer>
+
+  <dialog id="auth-dialog">
+    <form method="dialog" class="dialog-close-row"><button class="icon-button" aria-label="Close">×</button></form>
+    <div class="eyebrow">JOIN THE DIVE</div><h2 id="auth-title">Welcome back</h2><p class="muted" id="auth-subtitle">Sign in to save your scores and compete.</p>
+    <form id="auth-form" class="stack">
+      <label>Email<input id="auth-email" type="email" required autocomplete="email" placeholder="you@example.com"></label>
+      <label>Password<input id="auth-password" type="password" required minlength="6" autocomplete="current-password" placeholder="At least 6 characters"></label>
+      <label id="nickname-wrap" class="hidden">Player name<input id="auth-nickname" maxlength="24" placeholder="What should we call you?"></label>
+      <button class="button button-primary" id="auth-submit" type="submit">Sign in</button>
+      <button class="text-button" id="auth-toggle" type="button">New here? Create an account</button>
+      <p class="form-message" id="auth-message"></p>
+    </form>
+  </dialog>
+
+  <dialog id="setup-dialog">
+    <form method="dialog" class="dialog-close-row"><button class="icon-button" aria-label="Close">×</button></form>
+    <div class="eyebrow">ONE-TIME SETUP</div><h2>Connect your database</h2>
+    <p class="muted">Create a free Supabase project, run the SQL file in <code>daily-dive/supabase/schema.sql</code>, then paste your project URL and publishable/anon key below. These values are safe for a browser app when Row Level Security is enabled.</p>
+    <form id="config-form" class="stack">
+      <label>Supabase project URL<input id="config-url" type="url" required placeholder="https://your-project.supabase.co"></label>
+      <label>Supabase publishable / anon key<input id="config-key" required placeholder="eyJ…"></label>
+      <button class="button button-primary" type="submit">Connect database</button>
+      <p class="muted small">Connection settings are stored only in this browser. To deploy for everyone, set the same values in app.js or use a build-time environment configuration.</p>
+      <p class="form-message" id="config-message"></p>
+    </form>
+  </dialog>
+  <script src="./app.js"></script>
+</body>
+</html>
