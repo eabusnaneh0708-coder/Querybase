@@ -22,6 +22,7 @@ Emillions is a no-sign-in daily trivia game with seven open-ended questions, pla
 - `supabase/migrations/20261023_emillions_ai_rarity.sql`: additive migration for question metadata, score details, answer-frequency observations, and secure scoring permissions.
 - `supabase/functions/emillions-api/index.ts`: AI question generation, name registration, AI answer validation/scoring, and frequency calibration.
 - `supabase/schedule-daily.sql`: optional daily scheduler SQL.
+- `supabase/disable-legacy-scoring.sql`: final security hardening after the new frontend is live.
 
 ## Deploy changes safely
 
@@ -34,7 +35,7 @@ In the Supabase dashboard for project `czpzmreqvmoarzuyvxkn.supabase.co`:
 3. Paste the entire file into a new query and run it.
 4. Confirm it completes successfully before deploying the new frontend.
 
-This migration preserves existing tables and scores. It adds new columns and an answer-frequency table, updates safe public read functions, and disables the old client-callable scoring RPC so new submissions must use the server-side function.
+This migration preserves existing tables and scores. It adds new columns and an answer-frequency table and updates the public-safe read functions. The old scoring RPC remains available temporarily so the existing live frontend does not break during setup; disable it only after the new frontend and Edge Function are working.
 
 ### 2. Set Edge Function secrets
 
@@ -58,7 +59,13 @@ supabase functions deploy emillions-api --no-verify-jwt
 
 Public registration/submission actions are exposed by the function; host generation checks the signed-in user's Supabase profile for the `admin` role. Scheduled generation requires the `x-cron-secret` header.
 
-### 3. Generate today's questions
+### 3. Deploy the frontend after the Edge Function works
+
+Merge this PR to the branch connected to Netlify after the migration and Edge Function deployment are complete. Verify the deployed website lets a new guest choose a name, start the round, submit, and see their score.
+
+Then run `supabase/disable-legacy-scoring.sql` in the SQL Editor. This revokes access to the old scoring RPC so all new submissions use AI validation and rarity scoring.
+
+### 4. Generate today's questions
 
 After the migration and function are deployed:
 
@@ -69,7 +76,7 @@ After the migration and function are deployed:
 
 If there is already a published challenge for today, the function intentionally leaves it unchanged.
 
-### 4. Schedule automatic daily generation
+### 5. Schedule automatic daily generation
 
 To generate questions automatically, first enable the Supabase `pg_cron`, `pg_net`, and Vault extensions in the dashboard. Store the Edge Function URL as a Vault secret named `emillions_function_url` and the same random value used for `CRON_SECRET` as a Vault secret named `emillions_cron_secret`. Then run `supabase/schedule-daily.sql` in the SQL Editor. The schedule runs at 09:05 UTC, which is early morning in the US Eastern time zone, and the function calculates the correct Eastern date.
 
@@ -79,7 +86,7 @@ You can inspect scheduled jobs with:
 select * from cron.job;
 ```
 
-### 5. Publish the website
+### 6. Publish the website
 
 Merge the reviewed changes to the branch connected to Netlify, or deploy the `daily-dive` folder manually. Verify the deployed site uses the existing Supabase URL and publishable key at the top of `app.js`.
 
