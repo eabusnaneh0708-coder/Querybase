@@ -2,8 +2,8 @@
  * Set SUPABASE_URL and SUPABASE_ANON_KEY before publishing.
  * Never put a Supabase service-role key in this browser file.
  */
-const SUPABASE_URL = "";
-const SUPABASE_ANON_KEY = "";
+const SUPABASE_URL = "https://czpzmreqvmoarzuyvxkn.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_capEYCXpQ__g6lj2JJOacg_2SweKbpr";
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const today = () => new Intl.DateTimeFormat("en-CA", {timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
