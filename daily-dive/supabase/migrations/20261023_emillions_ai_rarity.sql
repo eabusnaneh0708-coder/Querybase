@@ -132,6 +132,3 @@ end;
 $$;
 revoke all on function public.record_answer_observation(uuid,text,text) from public, anon, authenticated;
 grant execute on function public.record_answer_observation(uuid,text,text) to service_role;
-
--- Force all new submissions through the server-side AI validation/scoring endpoint.
-revoke all on function public.submit_daily_dive(uuid,text,jsonb) from public, anon, authenticated;
