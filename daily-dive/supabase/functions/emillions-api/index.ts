@@ -29,46 +29,46 @@ type BankQuestion = { prompt: string; category: string; difficulty: "easy" | "me
 const a = (text: string, tier: Tier = "Common"): BankAnswer => ({ text, tier });
 const QUESTION_BANK: BankQuestion[] = [
   { prompt: "Name a Nintendo 64 game.", category: "Retro gaming", difficulty: "easy", answers: [
-    a("Super Mario 64"),a("Mario Kart 64"),a("GoldenEye 007"),a("The Legend of Zelda Ocarina of Time","Uncommon"),a("Super Smash Bros","Uncommon"),a("Banjo-Kazooie","Uncommon"),a("Wave Race 64","Rare"),a("Mischief Makers","Epic"),a("Blast Corps","Rare")
+    a("Super Mario 64"),a("Mario Kart 64"),a("GoldenEye 007"),a("The Legend of Zelda Ocarina of Time","Uncommon"),a("Super Smash Bros","Uncommon"),a("Banjo-Kazooie","Uncommon"),a("Wave Race 64","Rare"),a("Mischief Makers","Legendary"),a("Blast Corps","Rare")
   ]},
   { prompt: "Name a popular video game console.", category: "Gaming", difficulty: "easy", answers: [
-    a("PlayStation"),a("Xbox"),a("Nintendo Switch"),a("PlayStation 5","Uncommon"),a("Game Boy","Uncommon"),a("Sega Dreamcast","Rare"),a("Atari Jaguar","Epic"),a("Neo Geo","Super Rare")
+    a("PlayStation"),a("Xbox"),a("Nintendo Switch"),a("PlayStation 5","Uncommon"),a("Game Boy","Uncommon"),a("Sega Dreamcast","Rare"),a("Atari Jaguar","Epic"),a("Neo Geo","Legendary")
   ]},
   { prompt: "Name a web browser.", category: "Internet", difficulty: "easy", answers: [
-    a("Google Chrome"),a("Microsoft Edge"),a("Mozilla Firefox"),a("Safari","Uncommon"),a("Opera","Rare"),a("Brave","Rare"),a("Vivaldi","Epic"),a("Mosaic","Super Rare")
+    a("Google Chrome"),a("Microsoft Edge"),a("Mozilla Firefox"),a("Safari","Uncommon"),a("Opera","Rare"),a("Brave","Rare"),a("Vivaldi","Epic"),a("Mosaic","Legendary")
   ]},
   { prompt: "Name a computer operating system.", category: "Computers", difficulty: "easy", answers: [
-    a("Windows"),a("macOS"),a("Linux","Uncommon"),a("Android","Uncommon"),a("ChromeOS","Rare"),a("FreeBSD","Rare"),a("Haiku","Epic"),a("TempleOS","Super Rare")
+    a("Windows"),a("macOS"),a("Linux","Uncommon"),a("Android","Uncommon"),a("ChromeOS","Rare"),a("FreeBSD","Rare"),a("Haiku","Epic"),a("TempleOS","Legendary")
   ]},
   { prompt: "Name a computer component that stores files.", category: "Hardware", difficulty: "medium", answers: [
-    a("Hard drive"),a("SSD","Uncommon"),a("USB flash drive","Uncommon"),a("NVMe drive","Rare"),a("SD card","Rare"),a("Magnetic tape","Epic"),a("Zip drive","Epic")
+    a("Hard drive"),a("SSD","Uncommon"),a("USB flash drive","Uncommon"),a("NVMe drive","Rare"),a("SD card","Rare"),a("Magnetic tape","Epic"),a("Zip drive","Legendary")
   ]},
   { prompt: "Name a programming language.", category: "Software", difficulty: "medium", answers: [
-    a("Python"),a("JavaScript"),a("Java","Uncommon"),a("C++","Uncommon"),a("Rust","Rare"),a("Fortran","Rare"),a("COBOL","Epic"),a("Erlang","Epic")
+    a("Python"),a("JavaScript"),a("Java","Uncommon"),a("C++","Uncommon"),a("Rust","Rare"),a("Fortran","Rare"),a("COBOL","Epic"),a("Erlang","Legendary")
   ]},
   { prompt: "Name a company that makes computer processors.", category: "Hardware", difficulty: "medium", answers: [
-    a("Intel"),a("AMD","Uncommon"),a("Apple","Uncommon"),a("Qualcomm","Rare"),a("MediaTek","Rare"),a("Ampere Computing","Epic"),a("Loongson","Super Rare")
+    a("Intel"),a("AMD","Uncommon"),a("Apple","Uncommon"),a("Qualcomm","Rare"),a("MediaTek","Rare"),a("Ampere Computing","Epic"),a("Loongson","Legendary")
   ]},
   { prompt: "Name a file format used for images.", category: "Computers", difficulty: "medium", answers: [
-    a("JPEG"),a("PNG","Uncommon"),a("GIF","Uncommon"),a("WebP","Rare"),a("TIFF","Rare"),a("AVIF","Epic"),a("JPEG XL","Super Rare")
+    a("JPEG"),a("PNG","Uncommon"),a("GIF","Uncommon"),a("WebP","Rare"),a("TIFF","Rare"),a("AVIF","Epic"),a("JPEG XL","Legendary")
   ]},
   { prompt: "Name a virtualization platform or hypervisor.", category: "IT", difficulty: "hard", answers: [
-    a("VMware ESXi"),a("Hyper-V","Uncommon"),a("Proxmox VE","Rare"),a("Xen","Rare"),a("KVM","Rare"),a("bhyve","Epic"),a("oVirt","Epic"),a("SmartOS","Super Rare")
+    a("VMware ESXi"),a("Hyper-V","Uncommon"),a("Proxmox VE","Rare"),a("Xen","Rare"),a("KVM","Rare"),a("bhyve","Epic"),a("oVirt","Epic"),a("SmartOS","Legendary")
   ]},
   { prompt: "Name a network protocol used to assign IP addresses automatically.", category: "Networking", difficulty: "hard", answers: [
-    a("DHCP"),a("Dynamic Host Configuration Protocol","Uncommon"),a("BOOTP","Rare"),a("DHCPv6","Epic"),a("Zeroconf","Super Rare")
+    a("DHCP"),a("Dynamic Host Configuration Protocol","Uncommon"),a("BOOTP","Rare"),a("DHCPv6","Epic"),a("Zeroconf","Legendary")
   ]},
   { prompt: "Name a database system.", category: "Software", difficulty: "hard", answers: [
-    a("MySQL"),a("PostgreSQL","Uncommon"),a("Microsoft SQL Server","Uncommon"),a("SQLite","Rare"),a("CockroachDB","Rare"),a("Firebird","Epic"),a("DuckDB","Epic"),a("Ingres","Super Rare")
+    a("MySQL"),a("PostgreSQL","Uncommon"),a("Microsoft SQL Server","Uncommon"),a("SQLite","Rare"),a("CockroachDB","Rare"),a("Firebird","Epic"),a("DuckDB","Epic"),a("Ingres","Legendary")
   ]},
   { prompt: "Name a technology used to encrypt web traffic.", category: "Cybersecurity", difficulty: "hard", answers: [
-    a("TLS"),a("SSL","Uncommon"),a("HTTPS","Uncommon"),a("Let's Encrypt","Rare"),a("QUIC","Epic"),a("DTLS","Epic"),a("ECH","Super Rare")
+    a("TLS"),a("SSL","Uncommon"),a("HTTPS","Uncommon"),a("Let's Encrypt","Rare"),a("QUIC","Epic"),a("DTLS","Epic"),a("ECH","Legendary")
   ]},
   { prompt: "Name a Linux filesystem.", category: "IT", difficulty: "expert", answers: [
-    a("ext4"),a("XFS","Uncommon"),a("Btrfs","Rare"),a("ZFS","Rare"),a("F2FS","Epic"),a("JFS","Epic"),a("ReiserFS","Super Rare"),a("bcachefs","Super Rare")
+    a("ext4"),a("XFS","Uncommon"),a("Btrfs","Rare"),a("ZFS","Rare"),a("F2FS","Epic"),a("JFS","Epic"),a("ReiserFS","Super Rare"),a("bcachefs","Legendary")
   ]},
   { prompt: "Name a protocol used to exchange routing information between autonomous systems.", category: "Networking", difficulty: "expert", answers: [
-    a("BGP"),a("Border Gateway Protocol","Uncommon"),a("BGP-4","Rare"),a("MP-BGP","Epic"),a("BGP-LS","Super Rare")
+    a("BGP"),a("Border Gateway Protocol","Uncommon"),a("BGP-4","Rare"),a("MP-BGP","Epic"),a("BGP-LS","Legendary")
   ]},
 ];
 
