@@ -113,3 +113,25 @@ revoke all on function public.get_my_daily_submission(uuid) from public;
 grant execute on function public.get_my_daily_submission(uuid) to anon, authenticated;
 revoke all on function public.get_daily_leaderboard(date) from public;
 grant execute on function public.get_daily_leaderboard(date) to anon, authenticated;
+
+
+-- Atomically increment answer frequency so simultaneous submissions are not lost.
+create or replace function public.record_answer_observation(
+  p_question_id uuid, p_normalized_answer text, p_answer_display text
+) returns void
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  insert into public.answer_observations(question_id,normalized_answer,answer_display,occurrences,updated_at)
+  values (p_question_id, p_normalized_answer, p_answer_display, 1, now())
+  on conflict (question_id,normalized_answer) do update
+    set occurrences = public.answer_observations.occurrences + 1,
+        answer_display = excluded.answer_display,
+        updated_at = now();
+end;
+$$;
+revoke all on function public.record_answer_observation(uuid,text,text) from public, anon, authenticated;
+grant execute on function public.record_answer_observation(uuid,text,text) to service_role;
+
+-- Force all new submissions through the server-side AI validation/scoring endpoint.
+revoke all on function public.submit_daily_dive(uuid,text,jsonb) from public, anon, authenticated;
