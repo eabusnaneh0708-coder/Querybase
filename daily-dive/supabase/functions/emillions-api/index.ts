@@ -149,6 +149,41 @@ async function generateDaily(req: Request) {
   if (publishError) throw publishError;
   return json({ message: "Today's seven-question challenge was built from the curated question bank.", challenge_date: date, question_count: 7, order: selected.map(q => ({ prompt: q.prompt, difficulty: q.difficulty })) });
 }
+async function startDive(body: any) {
+  const guestId = String(body.guest_id || "");
+  if (!/^[0-9a-f-]{36}$/i.test(guestId)) return json({ error: "Invalid player ID." }, 400);
+  const { data: player, error: playerError } = await adminDb.from("guest_players")
+    .select("guest_id").eq("guest_id", guestId).maybeSingle();
+  if (playerError) throw playerError;
+  if (!player) return json({ error: "Choose your player name before starting." }, 400);
+
+  const date = todayEastern();
+  const { data: challenge, error: challengeError } = await adminDb.from("daily_challenges")
+    .select("id,status,questions(id)").eq("challenge_date", date).eq("status", "published").maybeSingle();
+  if (challengeError) throw challengeError;
+  if (!challenge) return json({ error: "Today's challenge is not published yet." }, 404);
+  if ((challenge.questions || []).length !== 7) {
+    return json({ error: "Today's challenge must contain exactly seven questions before the timer can start." }, 500);
+  }
+
+  const { data: previous, error: previousError } = await adminDb.from("submissions")
+    .select("id").eq("challenge_id", challenge.id).eq("guest_id", guestId).maybeSingle();
+  if (previousError) throw previousError;
+  if (previous) return json({ already_submitted: true }, 409);
+
+  const deadline = new Date(Date.now() + 3 * 60 * 1000).toISOString();
+  const { error: insertError } = await adminDb.from("challenge_attempts").insert({
+    challenge_id: challenge.id, guest_id: guestId, deadline_at: deadline,
+  });
+  if (insertError && insertError.code !== "23505") throw insertError;
+
+  const { data: attempt, error: attemptError } = await adminDb.from("challenge_attempts")
+    .select("started_at,deadline_at,submitted_at").eq("challenge_id", challenge.id).eq("guest_id", guestId).single();
+  if (attemptError) throw attemptError;
+  if (attempt.submitted_at) return json({ already_submitted: true }, 409);
+  return json({ started_at: attempt.started_at, deadline_at: attempt.deadline_at, duration_seconds: 180 });
+}
+
 async function submitDive(body: any) {
   const guestId = String(body.guest_id || "");
   const answers = body.answers;
@@ -167,6 +202,15 @@ async function submitDive(body: any) {
   const { data: previous, error: previousError } = await adminDb.from("submissions").select("id").eq("challenge_id", challenge.id).eq("guest_id", guestId).maybeSingle();
   if (previousError) throw previousError;
   if (previous) return json({ error: "You've already submitted today's dive." }, 409);
+  const { data: attempt, error: attemptError } = await adminDb.from("challenge_attempts")
+    .select("deadline_at,submitted_at").eq("challenge_id", challenge.id).eq("guest_id", guestId).maybeSingle();
+  if (attemptError) throw attemptError;
+  if (!attempt) return json({ error: "The timer has not started. Reload the challenge and try again." }, 400);
+  if (attempt.submitted_at) return json({ error: "You've already submitted today's dive." }, 409);
+  // Allow a 30-second network grace period for the automatic submission request.
+  if (Date.now() > new Date(attempt.deadline_at).getTime() + 30_000) {
+    return json({ error: "The submission arrived too long after the timer expired. Please contact the host if this looks wrong." }, 409);
+  }
   const qs = (challenge.questions || []).sort((x: any, y: any) => x.position - y.position);
   if (qs.length !== 7) return json({ error: "Today's challenge is not configured with seven questions." }, 500);
   const results: Record<string, any> = {};
@@ -194,6 +238,8 @@ async function submitDive(body: any) {
     challenge_id: challenge.id, guest_id: guestId, answers, total_score: total, results, rank_name: rank,
   }).select("id,submitted_at").single();
   if (insertError) return json({ error: insertError.code === "23505" ? "You've already submitted today's dive." : insertError.message }, insertError.code === "23505" ? 409 : 500);
+  await adminDb.from("challenge_attempts").update({ submitted_at: new Date().toISOString() })
+    .eq("challenge_id", challenge.id).eq("guest_id", guestId);
   for (const q of qs) {
     const r = results[q.id];
     if (!r?.valid || !r.normalized_answer) continue;
@@ -211,6 +257,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     switch (body.action) {
       case "register": return await registerPlayer(body);
+      case "start": return await startDive(body);
       case "submit": return await submitDive(body);
       case "generate": return await generateDaily(req);
       default: return json({ error: "Unknown action." }, 400);

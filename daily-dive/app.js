@@ -8,6 +8,7 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const today = () => new Intl.DateTimeFormat("en-CA", {timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 let db=null, host=null, hostProfile=null, questions=[], answers={}, currentQuestion=0, existingSubmission=null, isAdmin=false, currentChallenge=null, boardTimer=null;
+let attemptDeadline=null, countdownInterval=null, timerExpired=false, isSubmitting=false;
 
 function initDb(){
   const url=localStorage.getItem("dd_supabase_url")||SUPABASE_URL;
@@ -122,7 +123,21 @@ async function loadChallenge(){
     existingSubmission=sub||null;
     if(existingSubmission?.nickname && !guest.nickname){guest.nickname=existingSubmission.nickname;localStorage.setItem("dd_guest_player",JSON.stringify(guest));}
     answers=existingSubmission?.answers||{};currentQuestion=0;
-    if(!guest.nickname && !existingSubmission)renderNameSetup(data);else renderGame(data);
+    if(existingSubmission){
+      if(countdownInterval)clearInterval(countdownInterval);
+      countdownInterval=null;attemptDeadline=null;
+      $("#countdown-timer")?.classList.add("hidden");
+      renderResults(existingSubmission);
+    }else if(!guest.nickname){
+      $("#countdown-timer")?.classList.add("hidden");
+      renderNameSetup(data);
+    }else{
+      const draftKey=draftStorageKey(data.id,guest.id);
+      try{answers={...answers,...JSON.parse(localStorage.getItem(draftKey)||"{}")};}catch{}
+      const attempt=await startChallengeAttempt(data,guest);
+      startCountdown(attempt.deadline_at,data,guest);
+      renderGame(data);
+    }
   }catch(err){
     console.error(err);$("#play-status").textContent="Database error";
     $("#game-content").innerHTML='<div class="empty-state"><h3>Could not load today\'s challenge</h3><p>'+escapeHtml(err.message||"Check the database setup.")+'</p><button class="button button-outline" id="retry">Try again</button></div>';
@@ -144,30 +159,92 @@ function renderNameSetup(challenge){
     }catch(err){setMessage("#player-name-message",err.message||"Could not save that name.",true);btn.disabled=false;}
   });
 }
+function draftStorageKey(challengeId,guestId){return "dd_answers_"+challengeId+"_"+guestId;}
+function saveDraftAnswers(){
+  const guest=guestForToday();
+  if(currentChallenge?.id&&guest?.id){
+    try{localStorage.setItem(draftStorageKey(currentChallenge.id,guest.id),JSON.stringify(answers));}catch{}
+  }
+}
+function saveCurrentAnswer(){
+  const field=$("#answer-field");
+  if(field&&questions[currentQuestion])answers[questions[currentQuestion].id]=field.value.trim();
+  saveDraftAnswers();
+}
+async function startChallengeAttempt(challenge,guest){
+  const {data,error}=await db.functions.invoke("emillions-api",{body:{action:"start",guest_id:guest.id}});
+  if(error)throw error;
+  if(data?.error)throw new Error(data.error);
+  if(data?.already_submitted)throw new Error("You've already submitted today's dive.");
+  return data;
+}
+function startCountdown(deadline,challenge,guest){
+  if(countdownInterval)clearInterval(countdownInterval);
+  attemptDeadline=new Date(deadline).getTime();
+  timerExpired=false;
+  const timer=$("#countdown-timer");
+  timer.classList.remove("hidden");
+  const tick=()=>{
+    const remaining=Math.max(0,attemptDeadline-Date.now());
+    const seconds=Math.ceil(remaining/1000);
+    timer.textContent=String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
+    timer.classList.toggle("timer-warning",seconds<=30);
+    if(remaining<=0&&!timerExpired){
+      timerExpired=true;
+      if(countdownInterval)clearInterval(countdownInterval);
+      countdownInterval=null;
+      saveCurrentAnswer();
+      timer.textContent="Submitting…";
+      submitAnswers(challenge,true);
+    }
+  };
+  tick();
+  countdownInterval=setInterval(tick,250);
+}
 function renderGame(challenge){
   if(!questions.length){$("#game-content").innerHTML='<div class="empty-state"><h3>No questions added yet</h3><p>The host will add questions in Question Studio.</p></div>';return;}
   if(existingSubmission){renderResults(existingSubmission);return;}
   const q=questions[currentQuestion];
   $("#game-content").innerHTML='<div class="question-card"><div class="question-top"><span class="question-number">QUESTION '+String(currentQuestion+1).padStart(2,"0")+' / '+String(questions.length).padStart(2,"0")+'</span><span class="points">UP TO '+Number(q.base_points||100)+' PTS</span></div><h3>'+escapeHtml(q.prompt)+'</h3><input id="answer-field" class="answer-input" maxlength="120" autocomplete="off" placeholder="Type your answer…" value="'+escapeHtml(answers[q.id]||"")+'"><p class="muted small">Try to think of a good answer others might overlook. Your answers lock when you submit.</p></div><div class="game-actions"><div class="progress"><span style="width:'+((currentQuestion+1)/questions.length*100)+'%"></span></div><span class="muted small">'+Object.values(answers).filter(Boolean).length+' answered</span><button id="next-question" class="button button-primary">'+(currentQuestion===questions.length-1?"Review answers":"Next question →")+'</button></div>';
-  $("#answer-field").focus();$("#answer-field").addEventListener("input",e=>answers[q.id]=e.target.value.trim());
+  $("#answer-field").focus();$("#answer-field").addEventListener("input",e=>{answers[q.id]=e.target.value.trim();saveDraftAnswers();});
   $("#answer-field").addEventListener("keydown",e=>{if(e.key==="Enter")$("#next-question").click();});
-  $("#next-question").onclick=()=>{answers[q.id]=$("#answer-field").value.trim();if(currentQuestion<questions.length-1){currentQuestion++;renderGame(challenge);}else renderReview(challenge);};
+  $("#next-question").onclick=()=>{saveCurrentAnswer();if(currentQuestion<questions.length-1){currentQuestion++;renderGame(challenge);}else renderReview(challenge);};
 }
 function renderReview(challenge){
   const rows=questions.map((q,i)=>'<div class="result-line"><span><b>'+(i+1)+'.</b> '+escapeHtml(q.prompt)+'</span><span>'+escapeHtml(answers[q.id]||"—")+'</span></div>').join("");
   $("#game-content").innerHTML='<div class="panel"><div class="eyebrow">FINAL CHECK</div><h2>Ready to surface?</h2><p class="muted">You can submit once today. The game checks answers and calculates points securely in the database.</p>'+rows+'<div class="game-actions"><button id="back-question" class="button button-outline">← Back</button><button id="submit-answers" class="button button-primary">Submit answers</button></div><p class="form-message" id="submit-message"></p></div>';
-  $("#back-question").onclick=()=>{currentQuestion=questions.length-1;renderGame(challenge);};
-  $("#submit-answers").onclick=()=>submitAnswers(challenge);
+  $("#back-question").onclick=()=>{saveCurrentAnswer();currentQuestion=questions.length-1;renderGame(challenge);};
+  $("#submit-answers").onclick=()=>submitAnswers(challenge,false);
 }
-async function submitAnswers(challenge){
-  const btn=$("#submit-answers");btn.disabled=true;setMessage("#submit-message","Checking answers and calculating rarity…");
+async function submitAnswers(challenge,automatic=false){
+  if(isSubmitting||existingSubmission)return;
+  isSubmitting=true;
+  saveCurrentAnswer();
+  const btn=$("#submit-answers");
+  if(btn)btn.disabled=true;
+  if(!automatic)setMessage("#submit-message","Checking answers and calculating rarity…");
   try{
     const guest=guestForToday();
     const {data,error}=await db.functions.invoke("emillions-api",{body:{action:"submit",guest_id:guest.id,answers}});
     if(error)throw error;
     if(data?.error)throw new Error(data.error);
-    existingSubmission=data;renderResults(data);loadLeaderboard();
-  }catch(err){setMessage("#submit-message",err.message||"Could not submit. Please try again.",true);btn.disabled=false;}
+    existingSubmission=data;
+    if(countdownInterval)clearInterval(countdownInterval);
+    countdownInterval=null;attemptDeadline=null;
+    try{localStorage.removeItem(draftStorageKey(currentChallenge?.id,guest.id));}catch{}
+    $("#countdown-timer")?.classList.add("hidden");
+    renderResults(data);loadLeaderboard();
+  }catch(err){
+    if(automatic){
+      renderReview(challenge);
+      setMessage("#submit-message","Time expired, but automatic submission failed: "+(err.message||"Please submit again now."),true);
+      const timer=$("#countdown-timer");
+      timer.classList.remove("hidden");timer.textContent="Time expired";timer.classList.add("timer-warning");
+    }else{
+      setMessage("#submit-message",err.message||"Could not submit. Please try again.",true);
+    }
+    if(btn)btn.disabled=false;
+  }finally{isSubmitting=false;}
 }
 
 function rankForScore(score){
@@ -179,6 +256,9 @@ function rankForScore(score){
   return "Daily Diver";
 }
 function renderResults(submission){
+  if(countdownInterval)clearInterval(countdownInterval);
+  countdownInterval=null;attemptDeadline=null;
+  $("#countdown-timer")?.classList.add("hidden");
   const resultMap=submission.results||{};
   const rows=questions.map(q=>{
     const r=resultMap[q.id]||{};
