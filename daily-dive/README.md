@@ -44,8 +44,6 @@ Install the Supabase CLI, log in, and link the existing project. Then set secret
 ```sh
 supabase login
 supabase link --project-ref czpzmreqvmoarzuyvxkn
-supabase secrets set OPENAI_API_KEY=YOUR_OPENAI_API_KEY
-supabase secrets set OPENAI_MODEL=gpt-4o-mini
 supabase secrets set CRON_SECRET=GENERATE_A_LONG_RANDOM_SECRET
 ```
 
@@ -71,8 +69,8 @@ After the migration and function are deployed:
 
 1. Open the website and sign in using the existing trusted host account.
 2. Open **Question studio**.
-3. Click **Generate today's 7 with AI**.
-4. The function generates the 2/2/2/1 difficulty mix, shuffles it, saves it, and publishes the daily round.
+3. Click **Load today's 7 from question bank**.
+4. The function selects from the built-in curated question bank, shuffles the 2/2/2/1 difficulty mix, saves it, and publishes the daily round.
 
 If there is already a published challenge for today, the function intentionally leaves it unchanged.
 
@@ -92,9 +90,9 @@ Merge the reviewed changes to the branch connected to Netlify, or deploy the `da
 
 ## Security and fairness
 
-- Never place OpenAI or Supabase service-role secrets in `app.js`.
-- Public browser requests never receive accepted-answer lists or AI scoring internals.
-- AI checks whether an answer fits the question and estimates its likely frequency. The score blends this estimate with actual player answer counts.
+- Never place Supabase service-role secrets in `app.js`.
+- Public browser requests never receive accepted-answer lists or scoring internals.
+- Answers are validated by normalized exact matching against curated accepted-answer lists. Each accepted answer has a predefined rarity tier; the bank can be expanded as players suggest valid alternatives.
 - Database uniqueness prevents the same guest ID from submitting twice for the same challenge. Display names are unique case-insensitively.
 - A guest identity is persistent only in the same browser storage. Clearing site data or switching devices creates a new identity; stronger identity verification would require optional accounts.
-- The rarity estimates are estimates, not verified population surveys. Scores are frozen when submitted.
+- Rarity tiers are curated game values, not verified population surveys. Scores are frozen when submitted.
