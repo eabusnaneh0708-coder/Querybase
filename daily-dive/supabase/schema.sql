@@ -87,7 +87,7 @@ begin
     ), '[]'::jsonb)
   ) into result
   from public.daily_challenges c
-  where c.challenge_date = current_date and c.status = 'published';
+  where c.challenge_date = (now() at time zone 'America/New_York')::date and c.status = 'published';
   return result;
 end;
 $$;
@@ -112,7 +112,7 @@ begin
   if safe_nickname = '' then safe_nickname := 'Diver-' || upper(substr(replace(p_guest_id::text,'-',''),1,4)); end if;
 
   select * into challenge_row from public.daily_challenges
-    where challenge_date = current_date and status = 'published' for share;
+    where challenge_date = (now() at time zone 'America/New_York')::date and status = 'published' for share;
   if not found then raise exception 'There is no published challenge today.'; end if;
 
   insert into public.guest_players(guest_id,nickname,last_seen_at)
@@ -151,7 +151,27 @@ begin
 end;
 $$;
 
-create or replace function public.get_daily_leaderboard(p_challenge_date date default current_date)
+create or replace function public.get_my_daily_submission(p_guest_id uuid)
+returns jsonb language plpgsql stable security definer set search_path = ''
+as $
+declare result jsonb;
+begin
+  select jsonb_build_object(
+    'id', s.id, 'total_score', s.total_score, 'answers', s.answers,
+    'submitted_at', s.submitted_at, 'nickname', gp.nickname
+  ) into result
+  from public.submissions s
+  join public.guest_players gp on gp.guest_id=s.guest_id
+  join public.daily_challenges c on c.id=s.challenge_id
+  where s.guest_id=p_guest_id
+    and c.challenge_date=(now() at time zone 'America/New_York')::date
+    and c.status in ('published','closed')
+  limit 1;
+  return result;
+end;
+$;
+
+create or replace function public.get_daily_leaderboard(p_challenge_date date default null)
 returns table(nickname text,total_score int,submitted_at timestamptz)
 language sql stable security definer set search_path = ''
 as $$
@@ -159,7 +179,7 @@ as $$
   from public.submissions s
   join public.guest_players gp on gp.guest_id=s.guest_id
   join public.daily_challenges c on c.id=s.challenge_id
-  where c.challenge_date=p_challenge_date and c.status in ('published','closed')
+  where (p_challenge_date is null or c.challenge_date=p_challenge_date) and c.status in ('published','closed')
   order by s.total_score desc, s.submitted_at asc
   limit 100;
 $$;
@@ -190,6 +210,8 @@ revoke all on public.profiles from anon, authenticated;
 grant select on public.profiles to authenticated;
 revoke all on public.daily_challenges from anon, authenticated;
 revoke all on public.questions from anon, authenticated;
+grant select, insert, update, delete on public.daily_challenges to authenticated;
+grant select, insert, update, delete on public.questions to authenticated;
 revoke all on public.guest_players from anon, authenticated;
 revoke all on public.submissions from anon, authenticated;
 
@@ -197,5 +219,7 @@ revoke all on function public.get_daily_challenge() from public;
 grant execute on function public.get_daily_challenge() to anon, authenticated;
 revoke all on function public.submit_daily_dive(uuid,text,jsonb) from public;
 grant execute on function public.submit_daily_dive(uuid,text,jsonb) to anon, authenticated;
+revoke all on function public.get_my_daily_submission(uuid) from public;
+grant execute on function public.get_my_daily_submission(uuid) to anon, authenticated;
 revoke all on function public.get_daily_leaderboard(date) from public;
 grant execute on function public.get_daily_leaderboard(date) to anon, authenticated;
