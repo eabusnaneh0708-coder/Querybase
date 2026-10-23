@@ -18,15 +18,15 @@ function initDb(){
 function escapeHtml(s=""){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function setMessage(selector,msg,error=false){const el=$(selector);if(!el)return;el.textContent=msg;el.classList.toggle("error",error);}
 function guestForToday(){
-  const key="dd_guest_"+today();let guest;
+  const key="dd_guest_player";let guest;
   try{guest=JSON.parse(localStorage.getItem(key)||"null");}catch{}
-  if(!guest||!guest.id||guest.date!==today()){
-    const id=crypto.randomUUID();
-    guest={id,date:today(),nickname:"Diver-"+id.replace(/-/g,"").slice(0,4).toUpperCase()};
+  if(!guest||!guest.id){
+    guest={id:crypto.randomUUID(),nickname:""};
     localStorage.setItem(key,JSON.stringify(guest));
   }
   return guest;
 }
+
 function showView(name){
   $$(".view").forEach(v=>v.classList.add("hidden"));
   $("#view-"+name).classList.remove("hidden");
@@ -119,12 +119,30 @@ async function loadChallenge(){
     const guest=guestForToday();
     const {data:sub,error:se}=await db.rpc("get_my_daily_submission",{p_guest_id:guest.id});
     if(se)console.warn(se);
-    existingSubmission=sub||null;answers=existingSubmission?.answers||{};currentQuestion=0;renderGame(data);
+    existingSubmission=sub||null;
+    if(existingSubmission?.nickname && !guest.nickname){guest.nickname=existingSubmission.nickname;localStorage.setItem("dd_guest_player",JSON.stringify(guest));}
+    answers=existingSubmission?.answers||{};currentQuestion=0;
+    if(!guest.nickname && !existingSubmission)renderNameSetup(data);else renderGame(data);
   }catch(err){
     console.error(err);$("#play-status").textContent="Database error";
     $("#game-content").innerHTML='<div class="empty-state"><h3>Could not load today\'s challenge</h3><p>'+escapeHtml(err.message||"Check the database setup.")+'</p><button class="button button-outline" id="retry">Try again</button></div>';
     $("#retry").onclick=loadChallenge;
   }
+}
+function renderNameSetup(challenge){
+  $( "#game-content" ).innerHTML='<div class="panel"><div class="eyebrow">YOUR PLAYER NAME</div><h2>Choose your name</h2><p class="muted">Your name appears beside your score on the Emillions leaderboard. You only need to choose it once on this browser.</p><form id="player-name-form" class="stack"><label>Display name<input id="player-name-input" minlength="2" maxlength="20" required pattern="[A-Za-z0-9 _-]{2,20}" autocomplete="nickname" placeholder="e.g. RetroTech99"></label><p class="muted small">2–20 letters, numbers, spaces, dashes or underscores. Names must be unique.</p><button class="button button-primary" id="save-player-name" type="submit">Save name and play</button><p class="form-message" id="player-name-message"></p></form></div>';
+  $("#player-name-form").addEventListener("submit",async e=>{
+    e.preventDefault();const btn=$("#save-player-name");btn.disabled=true;setMessage("#player-name-message","Checking name…");
+    try{
+      const nickname=$("#player-name-input").value.trim();
+      const guest=guestForToday();
+      const {data,error}=await db.functions.invoke("emillions-api",{body:{action:"register",guest_id:guest.id,nickname}});
+      if(error)throw error;
+      if(data?.error)throw new Error(data.error);
+      guest.nickname=data.nickname;localStorage.setItem("dd_guest_player",JSON.stringify(guest));
+      await loadChallenge();
+    }catch(err){setMessage("#player-name-message",err.message||"Could not save that name.",true);btn.disabled=false;}
+  });
 }
 function renderGame(challenge){
   if(!questions.length){$("#game-content").innerHTML='<div class="empty-state"><h3>No questions added yet</h3><p>The host will add questions in Question Studio.</p></div>';return;}
@@ -142,19 +160,37 @@ function renderReview(challenge){
   $("#submit-answers").onclick=()=>submitAnswers(challenge);
 }
 async function submitAnswers(challenge){
-  const btn=$("#submit-answers");btn.disabled=true;setMessage("#submit-message","Submitting your dive…");
+  const btn=$("#submit-answers");btn.disabled=true;setMessage("#submit-message","Checking answers and calculating rarity…");
   try{
     const guest=guestForToday();
-    const {data,error}=await db.rpc("submit_daily_dive",{p_guest_id:guest.id,p_nickname:guest.nickname,p_answers:answers});
+    const {data,error}=await db.functions.invoke("emillions-api",{body:{action:"submit",guest_id:guest.id,answers}});
     if(error)throw error;
+    if(data?.error)throw new Error(data.error);
     existingSubmission=data;renderResults(data);loadLeaderboard();
   }catch(err){setMessage("#submit-message",err.message||"Could not submit. Please try again.",true);btn.disabled=false;}
 }
+
+function rankForScore(score){
+  if(score>=600)return "Legendary";
+  if(score>=500)return "Super Rare";
+  if(score>=385)return "Epic Hunter";
+  if(score>=245)return "Rare Hunter";
+  if(score>=140)return "Explorer";
+  return "Daily Diver";
+}
 function renderResults(submission){
-  const rows=questions.map(q=>'<div class="result-line"><span>'+escapeHtml(q.prompt)+'<div class="player-sub">Your answer: '+escapeHtml(submission.answers?.[q.id]||"—")+'</div></span><span class="points">'+Number(q.base_points||100)+' max</span></div>').join("");
-  $("#game-content").innerHTML='<div class="panel"><div class="eyebrow">DIVE COMPLETE</div><h2>Answers submitted.</h2><div class="result-total">'+Number(submission.total_score||0).toLocaleString()+'</div><p class="muted">Total points · Your anonymous score is on the shared daily leaderboard.</p>'+rows+'<div class="game-actions"><button class="button button-primary" id="see-board">See leaderboard →</button></div></div>';
+  const resultMap=submission.results||{};
+  const rows=questions.map(q=>{
+    const r=resultMap[q.id]||{};
+    const answer=submission.answers?.[q.id]||"—";
+    const status=r.valid ? '<span class="tag">'+escapeHtml(r.tier||"Scored")+' · '+Number(r.points||0)+' pts</span>' : '<span class="tag">0 pts · '+escapeHtml(r.tier||"Not accepted")+'</span>';
+    return '<div class="result-line"><span>'+escapeHtml(q.prompt)+'<div class="player-sub">Your answer: '+escapeHtml(answer)+'</div>'+status+'</span><span class="points">'+Number(r.points||0)+' pts</span></div>';
+  }).join("");
+  const rank= submission.rank_name || rankForScore(Number(submission.total_score||0));
+  $( "#game-content" ).innerHTML='<div class="panel"><div class="eyebrow">DIVE COMPLETE</div><h2>'+escapeHtml(submission.nickname||guestForToday().nickname||"Player")+', your dive is complete.</h2><div class="result-total">'+Number(submission.total_score||0).toLocaleString()+'</div><h3>'+escapeHtml(rank)+'</h3><p class="muted">Final score · Out of 700 possible points. Your score and rank are saved.</p>'+rows+'<div class="game-actions"><button class="button button-primary" id="see-board">See leaderboard →</button></div></div>';
   $("#see-board").onclick=()=>showView("leaderboard");
 }
+
 async function loadLeaderboard(){
   const el=$("#leaderboard-content");if(!db){el.innerHTML='<div class="empty-state"><p>Connect the database to see shared scores.</p><button class="button button-primary" id="leader-setup">Database setup</button></div>';$("#leader-setup").onclick=()=>$("#setup-dialog").showModal();return;}
   el.innerHTML='<div class="empty-state"><div class="spinner"></div><p>Loading scores…</p></div>';
@@ -171,7 +207,17 @@ async function renderAdmin(){
   if(!host||!isAdmin){el.innerHTML='<div class="empty-state"><h3>Host access only</h3><p>Use Host login with your trusted host account to manage questions.</p><button class="button button-primary" id="admin-login-button">Host login</button></div>';$("#admin-login-button").onclick=openHostLogin;return;}
   const {data:challenges,error}=await db.from("daily_challenges").select("id,challenge_date,title,status,questions(id,prompt,position)").order("challenge_date",{ascending:false}).limit(14);
   if(error){el.innerHTML='<div class="empty-state"><p>'+escapeHtml(error.message)+'</p></div>';return;}
-  el.innerHTML='<div class="panel"><div class="eyebrow">NEW CHALLENGE</div><form id="challenge-form" class="stack"><label>Date (Eastern time)<input type="date" id="challenge-date" required value="'+today()+'"></label><label>Challenge title<input id="challenge-title" maxlength="90" required placeholder="The Daily Mind-Bender"></label><label>Description<textarea id="challenge-description" placeholder="A short intro (optional)"></textarea></label><div id="question-builder"></div><button type="button" class="button secondary" id="add-question">＋ Add question</button><div class="admin-actions"><button class="button button-outline" type="submit" data-publish="false">Save draft</button><button class="button button-primary" type="submit" data-publish="true">Publish challenge</button></div><p class="form-message" id="admin-message"></p></form></div><h3>Recent challenges</h3><div id="challenge-list">'+(challenges||[]).map(c=>'<div class="question-admin"><div class="question-top"><b>'+escapeHtml(c.title)+'</b><span class="status-pill">'+escapeHtml(c.status)+'</span></div><p class="muted">'+escapeHtml(c.challenge_date)+' · '+(c.questions||[]).length+' questions</p></div>').join("")+'</div>';
+  el.innerHTML='<div class="panel"><div class="eyebrow">NEW CHALLENGE</div><p class="muted">Generate seven fresh questions with AI. The mix is 2 easy, 2 medium, 2 hard and 1 expert, shuffled once for everyone.</p><button type="button" class="button button-primary" id="generate-ai-challenge">Generate today&#39;s 7 with AI</button><p class="form-message" id="ai-generate-message"></p><form id="challenge-form" class="stack"><label>Date (Eastern time)<input type="date" id="challenge-date" required value="'+today()+'"></label><label>Challenge title<input id="challenge-title" maxlength="90" required placeholder="The Daily Mind-Bender"></label><label>Description<textarea id="challenge-description" placeholder="A short intro (optional)"></textarea></label><div id="question-builder"></div><button type="button" class="button secondary" id="add-question">＋ Add question</button><div class="admin-actions"><button class="button button-outline" type="submit" data-publish="false">Save draft</button><button class="button button-primary" type="submit" data-publish="true">Publish challenge</button></div><p class="form-message" id="admin-message"></p></form></div><h3>Recent challenges</h3><div id="challenge-list">'+(challenges||[]).map(c=>'<div class="question-admin"><div class="question-top"><b>'+escapeHtml(c.title)+'</b><span class="status-pill">'+escapeHtml(c.status)+'</span></div><p class="muted">'+escapeHtml(c.challenge_date)+' · '+(c.questions||[]).length+' questions</p></div>').join("")+'</div>';
+  $("#generate-ai-challenge").onclick=async()=>{
+    const btn=$("#generate-ai-challenge");btn.disabled=true;setMessage("#ai-generate-message","Generating and publishing today's questions…");
+    try{
+      const {data,error}=await db.functions.invoke("emillions-api",{body:{action:"generate"}});
+      if(error)throw error;if(data?.error)throw new Error(data.error);
+      setMessage("#ai-generate-message",data.message||"Today's challenge is ready.");
+      await loadChallenge();await renderAdmin();
+    }catch(err){setMessage("#ai-generate-message",err.message||"AI generation failed. Check Edge Function secrets and deployment.",true);}
+    finally{const again=$("#generate-ai-challenge");if(again)again.disabled=false;}
+  };
   let qCount=0;
   const addQuestion=(prompt="",accepted="",points=100)=>{qCount++;const id=qCount;const wrap=document.createElement("div");wrap.className="question-admin";wrap.dataset.qid=id;wrap.innerHTML='<div class="question-top"><span class="question-number">QUESTION '+String(id).padStart(2,"0")+'</span><button class="text-button remove-question" type="button">Remove</button></div><div class="stack"><label>Question prompt<textarea class="q-prompt" required placeholder="Name something…">'+escapeHtml(prompt)+'</textarea></label><label>Accepted answers<textarea class="q-accepted" required placeholder="Answer one, answer two, another valid answer">'+escapeHtml(accepted)+'</textarea><span class="muted small">Comma-separated. Matching ignores capitalization.</span></label><label>Maximum points<input class="q-points" type="number" min="1" max="1000" value="'+points+'"></label></div>';wrap.querySelector(".remove-question").onclick=()=>wrap.remove();$("#question-builder").appendChild(wrap);};
   addQuestion();addQuestion();$("#add-question").onclick=()=>addQuestion();
