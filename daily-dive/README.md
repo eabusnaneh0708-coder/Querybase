@@ -1,17 +1,17 @@
 # Emillions — Daily Dive
 
-Emillions is a no-sign-in daily trivia game with seven open-ended questions, player-chosen display names, AI-estimated answer rarity, saved end-of-round results, and a shared leaderboard.
+Emillions is a no-sign-in daily trivia game with seven open-ended questions, player-chosen display names, a curated answer/rarity database, saved end-of-round results, and a shared leaderboard. The game does not call a paid AI API.
 
 ## Game rules
 
 - Seven questions each day: 2 easy, 2 medium, 2 hard, and 1 expert.
-- AI shuffles the questions once when publishing; everyone sees the same order.
+- The built-in curated question bank selects 2 easy, 2 medium, 2 hard, and 1 expert question, then shuffles once when publishing; everyone sees the same order.
 - Topics mix approachable tech/pop culture (for example, Nintendo 64 games) with more difficult IT and cybersecurity prompts.
 - Players choose a unique 2–20 character display name. A persistent guest ID is stored in that browser.
 - Rarity tiers: Common 10, Uncommon 20, Rare 35, Epic 55, Super Rare 80, Legendary 100 points.
-- Estimated answer-frequency bands: Common ≥20%; Uncommon ≥10%; Rare ≥3%; Epic ≥1%; Super Rare ≥0.1%; Legendary <0.1%.
+- Rarity tiers are curated per accepted answer: Common 10, Uncommon 20, Rare 35, Epic 55, Super Rare 80, Legendary 100. These are designed game tiers, not measured population-frequency claims.
 - Final rank thresholds: Daily Diver 0–139; Explorer 140–244; Rare Hunter 245–384; Epic Hunter 385–499; Super Rare 500–599; Legendary 600–700.
-- AI estimates are blended with actual valid answer submissions using a 20-response prior. Real player data gradually has more influence as the sample grows.
+- Answer validation uses normalized exact matching against accepted answers in the question bank. This is predictable and free, but answers not listed in the bank are not accepted until the bank is updated.
 - Scores and ranks are saved at submission time and do not change retroactively.
 - This is a casual guest game, not a high-stakes contest. Guest IDs can be reset by clearing browser storage or using another device.
 
@@ -20,7 +20,7 @@ Emillions is a no-sign-in daily trivia game with seven open-ended questions, pla
 - `index.html`, `styles.css`, `app.js`: static web app.
 - `supabase/schema.sql`: original database schema; already applied in the existing project.
 - `supabase/migrations/20261023_emillions_ai_rarity.sql`: additive migration for question metadata, score details, answer-frequency observations, and secure scoring permissions.
-- `supabase/functions/emillions-api/index.ts`: AI question generation, name registration, AI answer validation/scoring, and frequency calibration.
+- `supabase/functions/emillions-api/index.ts`: curated question-bank generation, name registration, and deterministic answer validation/scoring; no OpenAI key is needed.
 - `supabase/schedule-daily.sql`: optional daily scheduler SQL.
 - `supabase/disable-legacy-scoring.sql`: final security hardening after the new frontend is live.
 
@@ -37,7 +37,7 @@ In the Supabase dashboard for project `czpzmreqvmoarzuyvxkn.supabase.co`:
 
 This migration preserves existing tables and scores. It adds new columns and an answer-frequency table and updates the public-safe read functions. The old scoring RPC remains available temporarily so the existing live frontend does not break during setup; disable it only after the new frontend and Edge Function are working.
 
-### 2. Set Edge Function secrets
+### 2. Configure the Edge Function
 
 Install the Supabase CLI, log in, and link the existing project. Then set secrets (replace the placeholders locally; never commit actual values):
 
@@ -49,7 +49,7 @@ supabase secrets set OPENAI_MODEL=gpt-4o-mini
 supabase secrets set CRON_SECRET=GENERATE_A_LONG_RANDOM_SECRET
 ```
 
-The function also needs the project's `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` environment variables. Supabase normally provides these to Edge Functions; if any are not present in the function environment, set them through the Supabase dashboard. The service-role key must only be stored as a server-side secret and must never appear in browser code, Git, screenshots, or public messages.
+The function does not need an OpenAI API key. It needs the project's `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` environment variables. Supabase normally provides these to Edge Functions; if any are not present in the function environment, set them through the Supabase dashboard. The service-role key must only be stored as a server-side secret and must never appear in browser code, Git, screenshots, or public messages.
 
 Deploy the function with gateway JWT verification disabled because it performs its own authorization for host generation and uses a separate secret for scheduled generation:
 
@@ -63,7 +63,7 @@ Public registration/submission actions are exposed by the function; host generat
 
 Merge this PR to the branch connected to Netlify after the migration and Edge Function deployment are complete. Verify the deployed website lets a new guest choose a name, start the round, submit, and see their score.
 
-Then run `supabase/disable-legacy-scoring.sql` in the SQL Editor. This revokes access to the old scoring RPC so all new submissions use AI validation and rarity scoring.
+Then run `supabase/disable-legacy-scoring.sql` in the SQL Editor. This revokes access to the old scoring RPC so all new submissions use the curated answer-bank validation and scoring.
 
 ### 4. Generate today's questions
 
