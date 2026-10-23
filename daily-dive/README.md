@@ -1,65 +1,98 @@
-# Daily Dive
+# Emillions — Daily Dive
 
-Daily Dive is a no-sign-in daily trivia game. Players open the link, answer the daily questions, and appear on a shared leaderboard under an anonymous name such as `Diver-A1B2`.
+Emillions is a no-sign-in daily trivia game with seven open-ended questions, player-chosen display names, a curated answer/rarity database, saved end-of-round results, and a shared leaderboard. The game does not call a paid AI API.
 
-## How players work
+## Game rules
 
-- No player accounts, email addresses, passwords, or public player profiles.
-- A random guest ID is saved in that browser for the current day.
-- The guest ID rotates on the next day in the America/New_York time zone.
-- Scores and submissions are stored in Supabase so the leaderboard is shared across devices.
-- The leaderboard refreshes automatically about every 10 seconds while it is open.
-- One submission per guest ID per daily challenge is enforced by the database.
-- The host uses a separate Supabase login only to create and publish questions.
+- Seven questions each day: 2 easy, 2 medium, 2 hard, and 1 expert.
+- The built-in curated question bank selects 2 easy, 2 medium, 2 hard, and 1 expert question, then shuffles once when publishing; everyone sees the same order.
+- Topics mix approachable tech/pop culture (for example, Nintendo 64 games) with more difficult IT and cybersecurity prompts.
+- Players choose a unique 2–20 character display name. A persistent guest ID is stored in that browser.
+- Rarity tiers: Common 10, Uncommon 20, Rare 35, Epic 55, Super Rare 80, Legendary 100 points.
+- Rarity tiers are curated per accepted answer: Common 10, Uncommon 20, Rare 35, Epic 55, Super Rare 80, Legendary 100. These are designed game tiers, not measured population-frequency claims.
+- Final rank thresholds: Daily Diver 0–139; Explorer 140–244; Rare Hunter 245–384; Epic Hunter 385–499; Super Rare 500–599; Legendary 600–700.
+- Answer validation uses normalized exact matching against accepted answers in the question bank. This is predictable and free, but answers not listed in the bank are not accepted until the bank is updated.
+- Scores and ranks are saved at submission time and do not change retroactively.
+- This is a casual guest game, not a high-stakes contest. Guest IDs can be reset by clearing browser storage or using another device.
 
-**Guest IDs are convenience, not strong identity verification.** Someone can clear browser storage, use another browser/device, or deliberately create a new ID. Without player accounts or another verification method, it is not possible to guarantee one entry per real person. This is suitable for a casual daily game, not a high-stakes contest.
+## Current project files
 
-## Setup
+- `index.html`, `styles.css`, `app.js`: static web app.
+- `supabase/schema.sql`: original database schema; already applied in the existing project.
+- `supabase/migrations/20261023_emillions_ai_rarity.sql`: additive migration for question metadata, score details, answer-frequency observations, and secure scoring permissions.
+- `supabase/functions/emillions-api/index.ts`: curated question-bank generation, name registration, and deterministic answer validation/scoring; no OpenAI key is needed.
+- `supabase/schedule-daily.sql`: optional daily scheduler SQL.
+- `supabase/disable-legacy-scoring.sql`: final security hardening after the new frontend is live.
 
-1. Create a Supabase project at [supabase.com](https://supabase.com/).
-2. Open **SQL Editor → New query** in Supabase.
-3. Open `supabase/schema.sql` from this folder, copy all of its contents into the SQL Editor, and run it. This creates the tables and secure database functions. It does not create any daily questions yet.
-4. In Supabase, open **Project Settings → API** (or the API keys section). Copy the **Project URL** and the **publishable key** (or legacy anon key). Never use a service-role/secret key in the website.
-5. Set the two constants at the top of `app.js`:
-   - `SUPABASE_URL` = your project URL
-   - `SUPABASE_ANON_KEY` = your publishable/anon key
-6. Deploy the contents of the `daily-dive` folder as a static website (Netlify, GitHub Pages, or another static host). The URL for the site is what you share with players.
+## Deploy changes safely
 
-You can use the **Database setup** button to test the connection in your own browser before publishing. Values entered there are saved only in that browser; they do not configure other visitors.
+### 1. Apply the database migration
 
-## Set up the host account
+In the Supabase dashboard for project `czpzmreqvmoarzuyvxkn.supabase.co`:
 
-Players do not sign in. Only the host needs a Supabase Auth account to access Question Studio.
+1. Open **SQL Editor**.
+2. Open `supabase/migrations/20261023_emillions_ai_rarity.sql` from this folder.
+3. Paste the entire file into a new query and run it.
+4. Confirm it completes successfully before deploying the new frontend.
 
-1. In Supabase, open **Authentication → Users** and create a host user (or use the dashboard's invite/create-user flow).
-2. Copy that user's UUID from the Users list.
-3. In **SQL Editor**, run the following, replacing the sample UUID with the host user's real UUID:
+This migration preserves existing tables and scores. It adds new columns and an answer-frequency table and updates the public-safe read functions. The old scoring RPC remains available temporarily so the existing live frontend does not break during setup; disable it only after the new frontend and Edge Function are working.
 
-   ```sql
-   update public.profiles
-   set role = 'admin'
-   where id = 'PASTE-HOST-USER-UUID-HERE';
-   ```
+### 2. Configure the Edge Function
 
-4. In Supabase **Authentication → URL Configuration**, add the deployed website URL to the allowed site/redirect URLs.
-5. On the game website, click **Host login**, sign in with the host credentials, and open **Question studio**.
-6. Create a challenge for today's date (Eastern time), add questions and accepted answers, then click **Publish challenge**.
+Install the Supabase CLI, log in, and link the existing project. Then set secrets (replace the placeholders locally; never commit actual values):
 
-Only promote trusted host accounts to admin. Do not share host credentials.
+```sh
+supabase login
+supabase link --project-ref czpzmreqvmoarzuyvxkn
+supabase secrets set CRON_SECRET=GENERATE_A_LONG_RANDOM_SECRET
+```
 
-## Security notes
+The function does not need an OpenAI API key. It needs the project's `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` environment variables. Supabase normally provides these to Edge Functions; if any are not present in the function environment, set them through the Supabase dashboard. The service-role key must only be stored as a server-side secret and must never appear in browser code, Git, screenshots, or public messages.
 
-- Public players call database functions; they cannot query the accepted-answer column directly through the browser API.
-- Answer checking and scoring happen in Postgres.
-- Row Level Security remains enabled on the tables.
-- Only use the Supabase publishable/anon key in the browser. Never expose a service-role key.
-- The host login is still required to manage questions; players never see a login prompt.
-- The current rarity scoring awards more points for valid answers that fewer earlier submissions used. Since scores are calculated when a player submits, later submissions do not retroactively recalculate earlier scores.
+Deploy the function with gateway JWT verification disabled because it performs its own authorization for host generation and uses a separate secret for scheduled generation:
 
-## Current limitations
+```sh
+supabase functions deploy emillions-api --no-verify-jwt
+```
 
-- No player accounts or cross-device score recovery.
-- A new browser/device has a new guest ID.
-- Guests can bypass the one-entry-per-person intention by clearing site data or switching browsers; this is expected for a casual anonymous game.
-- The daily challenge date uses America/New_York time.
-- Supabase and the hosting provider have free-plan limits.
+Public registration/submission actions are exposed by the function; host generation checks the signed-in user's Supabase profile for the `admin` role. Scheduled generation requires the `x-cron-secret` header.
+
+### 3. Deploy the frontend after the Edge Function works
+
+Merge this PR to the branch connected to Netlify after the migration and Edge Function deployment are complete. Verify the deployed website lets a new guest choose a name, start the round, submit, and see their score.
+
+Then run `supabase/disable-legacy-scoring.sql` in the SQL Editor. This revokes access to the old scoring RPC so all new submissions use the curated answer-bank validation and scoring.
+
+### 4. Generate today's questions
+
+After the migration and function are deployed:
+
+1. Open the website and sign in using the existing trusted host account.
+2. Open **Question studio**.
+3. Click **Load today's 7 from question bank**.
+4. The function selects from the built-in curated question bank, shuffles the 2/2/2/1 difficulty mix, saves it, and publishes the daily round.
+
+If there is already a published challenge for today, the function intentionally leaves it unchanged.
+
+### 5. Schedule automatic daily generation
+
+To generate questions automatically, first enable the Supabase `pg_cron`, `pg_net`, and Vault extensions in the dashboard. Store the Edge Function URL as a Vault secret named `emillions_function_url` and the same random value used for `CRON_SECRET` as a Vault secret named `emillions_cron_secret`. Then run `supabase/schedule-daily.sql` in the SQL Editor. The schedule runs at 09:05 UTC, which is early morning in the US Eastern time zone, and the function calculates the correct Eastern date.
+
+You can inspect scheduled jobs with:
+
+```sql
+select * from cron.job;
+```
+
+### 6. Publish the website
+
+Merge the reviewed changes to the branch connected to Netlify, or deploy the `daily-dive` folder manually. Verify the deployed site uses the existing Supabase URL and publishable key at the top of `app.js`.
+
+## Security and fairness
+
+- Never place Supabase service-role secrets in `app.js`.
+- Public browser requests never receive accepted-answer lists or scoring internals.
+- Answers are validated by normalized exact matching against curated accepted-answer lists. Each accepted answer has a predefined rarity tier; the bank can be expanded as players suggest valid alternatives.
+- Database uniqueness prevents the same guest ID from submitting twice for the same challenge. Display names are unique case-insensitively.
+- A guest identity is persistent only in the same browser storage. Clearing site data or switching devices creates a new identity; stronger identity verification would require optional accounts.
+- Rarity tiers are curated game values, not verified population surveys. Scores are frozen when submitted.
