@@ -12,7 +12,7 @@
   <header class="topbar">
     <a class="brand" href="#"><span class="brand-mark">✦</span> DAILY DIVE</a>
     <nav><button class="nav-link active" data-view="play">Play</button><button class="nav-link" data-view="leaderboard">Leaderboard</button><button class="nav-link admin-only hidden" data-view="admin">Question studio</button></nav>
-    <div id="account-area"><button id="login-open" class="button button-outline">Sign in</button></div>
+    <div id="account-area"><button id="host-login-open" class="button button-outline">Host login</button></div>
   </header>
   <main>
     <section class="hero">
@@ -37,28 +37,27 @@
   </main>
   <footer><span>DAILY DIVE</span><span>Made for curious minds.</span><button id="setup-open" class="footer-link">Database setup</button></footer>
 
-  <dialog id="auth-dialog">
+  <dialog id="host-auth-dialog">
     <form method="dialog" class="dialog-close-row"><button class="icon-button" aria-label="Close">×</button></form>
-    <div class="eyebrow">JOIN THE DIVE</div><h2 id="auth-title">Welcome back</h2><p class="muted" id="auth-subtitle">Sign in to save your scores and compete.</p>
-    <form id="auth-form" class="stack">
-      <label>Email<input id="auth-email" type="email" required autocomplete="email" placeholder="you@example.com"></label>
-      <label>Password<input id="auth-password" type="password" required minlength="6" autocomplete="current-password" placeholder="At least 6 characters"></label>
-      <label id="nickname-wrap" class="hidden">Player name<input id="auth-nickname" maxlength="24" placeholder="What should we call you?"></label>
-      <button class="button button-primary" id="auth-submit" type="submit">Sign in</button>
-      <button class="text-button" id="auth-toggle" type="button">New here? Create an account</button>
-      <p class="form-message" id="auth-message"></p>
+    <div class="eyebrow">HOST CONTROLS</div><h2>Host login</h2>
+    <p class="muted">Players never need to sign in. This login is only for the trusted person who creates and publishes questions.</p>
+    <form id="host-auth-form" class="stack">
+      <label>Host email<input id="host-auth-email" type="email" required autocomplete="username" placeholder="host@example.com"></label>
+      <label>Password<input id="host-auth-password" type="password" required autocomplete="current-password" placeholder="Host password"></label>
+      <button class="button button-primary" id="host-auth-submit" type="submit">Sign in as host</button>
+      <p class="form-message" id="host-auth-message"></p>
     </form>
   </dialog>
 
   <dialog id="setup-dialog">
     <form method="dialog" class="dialog-close-row"><button class="icon-button" aria-label="Close">×</button></form>
     <div class="eyebrow">ONE-TIME SETUP</div><h2>Connect your database</h2>
-    <p class="muted">Create a free Supabase project, run the SQL file in <code>daily-dive/supabase/schema.sql</code>, then paste your project URL and publishable/anon key below. These values are safe for a browser app when Row Level Security is enabled.</p>
+    <p class="muted">Run the updated SQL file in <code>daily-dive/supabase/schema.sql</code> in your Supabase SQL Editor, then paste your project URL and publishable/anon key. Players do not need accounts. Never use a service-role key here.</p>
     <form id="config-form" class="stack">
       <label>Supabase project URL<input id="config-url" type="url" required placeholder="https://your-project.supabase.co"></label>
       <label>Supabase publishable / anon key<input id="config-key" required placeholder="eyJ…"></label>
       <button class="button button-primary" type="submit">Connect database</button>
-      <p class="muted small">Connection settings are stored only in this browser. To deploy for everyone, set the same values in app.js or use a build-time environment configuration.</p>
+      <p class="muted small">These settings are stored only in this browser. Before publishing for everyone, put the project URL and publishable/anon key into app.js so every visitor connects to the same database.</p>
       <p class="form-message" id="config-message"></p>
     </form>
   </dialog>
