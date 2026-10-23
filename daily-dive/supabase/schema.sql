@@ -194,9 +194,6 @@ alter table public.submissions enable row level security;
 drop policy if exists "Host profile can read own row" on public.profiles;
 create policy "Host profile can read own row" on public.profiles
   for select to authenticated using (auth.uid()=id);
-drop policy if exists "Admins read all profiles" on public.profiles;
-create policy "Admins read all profiles" on public.profiles
-  for select to authenticated using (exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='admin'));
 drop policy if exists "Admins manage challenges" on public.daily_challenges;
 create policy "Admins manage challenges" on public.daily_challenges for all to authenticated
   using (exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='admin'))
