@@ -69,3 +69,47 @@ $$;
 
 -- Do not allow direct clients to write rarity observations.
 revoke all on public.answer_observations from public, anon, authenticated;
+
+
+create or replace function public.get_my_daily_submission(p_guest_id uuid)
+returns jsonb language plpgsql stable security definer set search_path = ''
+as $$
+declare result jsonb;
+begin
+  select jsonb_build_object(
+    'id', s.id, 'total_score', s.total_score, 'answers', s.answers,
+    'results', s.results, 'rank_name', s.rank_name,
+    'submitted_at', s.submitted_at, 'nickname', gp.nickname
+  ) into result
+  from public.submissions s
+  join public.guest_players gp on gp.guest_id=s.guest_id
+  join public.daily_challenges c on c.id=s.challenge_id
+  where s.guest_id=p_guest_id
+    and c.challenge_date=(now() at time zone 'America/New_York')::date
+    and c.status in ('published','closed')
+  limit 1;
+  return result;
+end;
+$$;
+
+create or replace function public.get_daily_leaderboard(p_challenge_date date default null)
+returns table(nickname text,total_score int,submitted_at timestamptz)
+language sql stable security definer set search_path = ''
+as $$
+  select gp.nickname, sum(s.total_score)::int as total_score, max(s.submitted_at) as submitted_at
+  from public.submissions s
+  join public.guest_players gp on gp.guest_id=s.guest_id
+  join public.daily_challenges c on c.id=s.challenge_id
+  where c.status in ('published','closed')
+    and (p_challenge_date is null or c.challenge_date=p_challenge_date)
+  group by gp.guest_id, gp.nickname
+  order by sum(s.total_score) desc, max(s.submitted_at) asc
+  limit 100;
+$$;
+
+revoke all on function public.get_daily_challenge() from public;
+grant execute on function public.get_daily_challenge() to anon, authenticated;
+revoke all on function public.get_my_daily_submission(uuid) from public;
+grant execute on function public.get_my_daily_submission(uuid) to anon, authenticated;
+revoke all on function public.get_daily_leaderboard(date) from public;
+grant execute on function public.get_daily_leaderboard(date) to anon, authenticated;
